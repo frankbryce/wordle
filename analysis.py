@@ -35,11 +35,19 @@ def main():
                 chardict[c] += onehot(d[c])
                 chartot[c] += 1
 
+    scores = dict()
+    for w in words:
+        scores[w] = 0
+        for c,cnt in charcount(w).items():
+            scores[w] += chartot[c]
+
     for c in alphabet:
         printstr = f'# {c} words: {chartot[c]:04}: '
         for n in range(4):
             printstr += f'{n+1} {c} words: {chardict[c][n]:04} | '
         print(printstr)
+
+    print([(w, score) for w, score in sorted(scores.items(), key=lambda item: item[1], reverse=True)][:10])
 
 
 
