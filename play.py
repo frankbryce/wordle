@@ -1,5 +1,6 @@
 import random
 from termcolor import cprint
+from tqdm import tqdm
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
 
@@ -72,7 +73,7 @@ def playGame(words):
         guess = bestWord(wordsLeft)
         nguesses += 1
         resps[guess] = getResp(guess, master)
-        printGuess(guess, resps[guess])
+        # printGuess(guess, resps[guess])
         words2rem = set()
         for word in wordsLeft:
             for guess, resp in resps.items():
@@ -80,7 +81,8 @@ def playGame(words):
                     words2rem.add(word)
         wordsLeft = wordsLeft - words2rem
 
-    print(f"you got it! The word was {master}.")
+    # print(f"you got it! The word was {master}.")
+    return nguesses
 
 
 def main():
@@ -88,7 +90,11 @@ def main():
     with open("dict.txt", "r") as f:
         for w in f.readlines():
             words.append(w.strip())
-    playGame(words)
+
+    cnt = 0
+    for i in tqdm(range(1_000)):
+        cnt += playGame(words)
+    print(f"Average score over 1_000 runs: {cnt/1_000:0.2f}")
 
 if __name__ == "__main__":
     main()

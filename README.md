@@ -1,2 +1,5 @@
 # wordle
-make AI that finds optimal wordle strategy
+
+```bash
+python3 -m pip install -r requirements.txt
+```
