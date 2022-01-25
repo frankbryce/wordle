@@ -5,26 +5,28 @@ import random
 from termcolor import cprint
 from tqdm import tqdm
 
-STRATEGY = 'COMMON_CHAR'
-FIRST_WORD = 'arose'  # hack to speed up search
+# STRATEGY = 'COMMON_CHAR'
 # STRATEGY = 'COMMON_CHAR_W_EXACT'
+# STRATEGY = 'RANDOM'
 # FIRST_WORD = 'rates'  # hack to speed up search
-# STRATEGY = 'HIGHEST_MATCH'
-# FIRST_WORD = 'eases'  # hack to speed up search
+STRATEGY = 'MONTE_CARLO'
+FIRST_WORD = 'stead'  # hack to speed up search
 
 # COMMON_CHAR_W_EXACT params
 IN_WORD_SCORE = 1
 EXACT_MATCH_SCORE = 1.45
 
 # MONTE_CARLO params
-MONTE_CARLO_SIM_COUNT = 10_000
+MONTE_CARLO_SIM_COUNT = 10
+MONTE_CARLO_STRATEGY = 'COMMON_CHAR'
 
+NUM_WORDS = None  # to be set by main()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-NUM_MASTERS = None
+NUM_MASTERS = 500
 VERBOSE = False
 
 
-@lru_cache(maxsize=3088)
+@lru_cache(maxsize=4096)
 def charcount(w):
     d = dict()
     for c in w:
@@ -33,9 +35,15 @@ def charcount(w):
         d[c] += 1
     return d
 
-def bestWord(wordsLeft, all_words, strategy):
-    if len(wordsLeft) == len(all_words) and FIRST_WORD:
+def bestWord(wordsLeft, strategy, guessWords):
+    if len(wordsLeft) == 0:
+        raise("bug in your code")
+    if len(wordsLeft) <= 2:
+        return next(iter(wordsLeft))
+    if len(wordsLeft) == NUM_WORDS and FIRST_WORD:
         return FIRST_WORD
+    if strategy == 'RANDOM':
+        return random.choice(list(wordsLeft))
     if strategy == 'COMMON_CHAR':
         chartot = dict()
         for c in ALPHABET:
@@ -66,29 +74,27 @@ def bestWord(wordsLeft, all_words, strategy):
         if not max_guess:
             raise("bug in your code, yyyyep")
         return max_guess
-    elif strategy == 'HIGHEST_MATCH':
-        cscore = dict()
-        for c in ALPHABET:
-            cscore[c] = [0,0,0,0,0]
-        for master in wordsLeft:
-            for i in range(5):
-                for j in range(5):
-                    add = 1
-                    if i == j:
-                        add = EXACT_MATCH_SCORE
-                    cscore[master[i]][j] += add
-        max_score = 0
-        max_guess = None
-        for guess in wordsLeft:
-            score = 0
-            for i in range(5):
-                score += cscore[guess[i]][i]
-            if score > max_score:
-                max_score = score
-                max_guess = guess
-        if not max_guess:
-            raise('BUG')
-        return max_guess
+    elif STRATEGY == 'MONTE_CARLO':
+        bestSoFar = 1_000_000_000 # way too big
+        bestGuess = None
+        for guess in guessWords:
+            nGuesses = 0
+            for master in random.sample(list(wordsLeft), min(len(wordsLeft), MONTE_CARLO_SIM_COUNT)):
+                resp = getResp(guess, master)
+                words2rem = set()
+                for word in wordsLeft:
+                    if getResp(guess, word) != resp:
+                        words2rem.add(word)
+                left = wordsLeft - words2rem
+                nGuesses += playGame(left, MONTE_CARLO_STRATEGY, master, left, verbose=False)
+                if nGuesses > bestSoFar * MONTE_CARLO_SIM_COUNT:
+                    break
+            if nGuesses < bestSoFar:
+                bestSoFar = nGuesses
+                bestGuess = guess
+        if not bestGuess:
+            raise(f"bug {bestGuess}")
+        return bestGuess
     else:
         raise(f"bad strategy {STRATEGY}")
 
@@ -106,6 +112,7 @@ def printGuess(guess, resp):
         cprint(c, 'white', r2color(resp[i]), end='')
     print()
 
+@lru_cache(maxsize=65536)
 def getResp(guess, master):
     # None is miss, False is wrong spot, True is right spot
     resp = [None,None,None,None,None]
@@ -127,28 +134,30 @@ def getResp(guess, master):
     return tuple(resp)
 
 
-def playGame(words, strategy, master=None, all_words=None):
-    if not master:
-        master = random.choice(words)
-    if not all_words:
-        all_words=frozenset(words)
-    wordsLeft = set(words)
+def playGame(wordsLeft, strategy, master, allWords=None, verbose=VERBOSE):
+    guessWords = set(allWords)
 
     guess = ''
     nguesses = 0
 
     while guess != master:
-        guess = bestWord(wordsLeft, all_words, strategy)
+        guess = bestWord(wordsLeft, strategy, guessWords)
         nguesses += 1
         resp = getResp(guess, master)
         for word in list(wordsLeft):
             if getResp(guess, word) != resp:
                 wordsLeft.remove(word)
-        if VERBOSE:
-            print(master, len(wordsLeft), sep=', ', end=', guess=')
+        missingChars = set(guess[i] for i in range(5) if resp[i] is None)
+        for word in list(guessWords):
+            for c in missingChars:
+                if c in word:
+                    guessWords.remove(word)
+                    break
+        if verbose:
+            print(master, len(wordsLeft), 'guess=', sep=', ')
             printGuess(guess, resp)
 
-    if VERBOSE:
+    if verbose:
         input()
     return nguesses
 
@@ -159,12 +168,15 @@ def main():
         for w in f.readlines():
             words.append(w.strip())
 
+    global NUM_WORDS
+    NUM_WORDS = len(words)
+
     masters = words
     if NUM_MASTERS:
         masters = random.sample(words, NUM_MASTERS)
     cnt = 0
     for master in tqdm(masters):
-        cnt += playGame(words, STRATEGY, master=master, all_words=frozenset(words))
+        cnt += playGame(set(words), STRATEGY, master, allWords=frozenset(words))
     print(f"Average score over {len(masters)} runs: {cnt/len(masters):0.2f}")
 
 if __name__ == "__main__":
