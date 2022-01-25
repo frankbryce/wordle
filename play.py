@@ -9,14 +9,10 @@ from tqdm import tqdm
 # FIRST_WORD = 'arose'  # hack to speed up search
 STRATEGY = 'COMMON_CHAR_W_EXACT'
 FIRST_WORD = 'rates'  # hack to speed up search
-# STRATEGY = 'MIN_MASTER_LEFT'
 
 # COMMON_CHAR_W_EXACT params
 IN_WORD_SCORE = 1
 EXACT_MATCH_SCORE = 1.45
-
-# MIN_MASTER_LEFT strategy params
-MASTER_CNT_LOG_BASE = 24  # master count left -> expected turns
 
 WORD_LIST = None  # to be set in main()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
@@ -66,27 +62,6 @@ def bestWord(wordsLeft):
         if not max_guess:
             raise("bug in your code, yyyyep")
         return max_guess
-    elif STRATEGY == 'MIN_MASTER_LEFT':
-        min_rem = -1
-        min_guess = None
-        masters = wordsLeft
-        guesses = wordsLeft
-        for guess in guesses:
-            expRem = 0
-            resps = dict()
-            for master in masters:
-                resp = getResp(guess,master)
-                if resp not in resps:
-                    resps[resp] = set()
-                resps[resp].add(master)
-            for resp, masters in resps.items():
-                expRem += len(masters) * math.log(len(masters), MASTER_CNT_LOG_BASE)
-            if expRem < min_rem or min_rem == -1:
-                max_rem = expRem
-                min_guess = guess
-        if not min_guess:
-            raise("bug in your code, dummy")
-        return min_guess
     else:
         raise(f"bad strategy {STRATEGY}")
 
