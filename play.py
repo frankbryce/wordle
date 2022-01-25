@@ -1,8 +1,17 @@
+import math
+import numpy as np
 import random
 from termcolor import cprint
 from tqdm import tqdm
 
-alphabet = 'abcdefghijklmnopqrstuvwxyz'
+# STRATEGY = 'COMMON_CHAR'
+
+STRATEGY = 'MIN_MASTER_LEFT'
+MASTER_CNT_LOG_BASE = 24  # master count left -> expected turns
+
+ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
+NUM_MASTERS = None
+VERBOSE = False
 
 def charcount(w):
     d = dict()
@@ -13,18 +22,42 @@ def charcount(w):
     return d
 
 def bestWord(words):
-    chartot = dict()
-    for c in alphabet:
-        chartot[c] = 0
-    for w in words:
-        for c,_ in charcount(w).items():
-            chartot[c] += 1
-    scores = dict()
-    for w in words:
-        scores[w] = 0
-        for c,_ in charcount(w).items():
-            scores[w] += chartot[c]
-    return sorted(scores.items(), key=lambda item: item[1], reverse=True)[0][0]
+    if STRATEGY == 'COMMON_CHAR':
+        chartot = dict()
+        for c in ALPHABET:
+            chartot[c] = 0
+        for w in words:
+            for c,_ in charcount(w).items():
+                chartot[c] += 1
+        scores = dict()
+        for w in words:
+            scores[w] = 0
+            for c,_ in charcount(w).items():
+                scores[w] += chartot[c]
+        return sorted(scores.items(), key=lambda item: item[1], reverse=True)[0][0]
+    elif STRATEGY == 'MIN_MASTER_LEFT':
+        min_rem = -1
+        min_guess = None
+        masters = words
+        guesses = words
+        for guess in guesses:
+            expRem = 0
+            resps = dict()
+            for master in masters:
+                resp = getResp(guess,master)
+                if resp not in resps:
+                    resps[resp] = set()
+                resps[resp].add(master)
+            for resp, masters in resps.items():
+                expRem += len(masters) * math.log(len(masters), MASTER_CNT_LOG_BASE)
+            if expRem < min_rem or min_rem == -1:
+                max_rem = expRem
+                min_guess = guess
+        if not min_guess:
+            raise("bug in your code, dummy")
+        return min_guess
+    else:
+        raise(f"bad strategy {STRATEGY}")
 
 def r2color(r):
     if r is None:
@@ -58,11 +91,12 @@ def getResp(guess, master):
                 break
         if c_in_guess >= 0:
             resp[c_in_guess] = False
-    return resp
+    return tuple(resp)
 
 
-def playGame(words):
-    master = random.choice(words)
+def playGame(words, master=None):
+    if not master:
+        master = random.choice(words)
     wordsLeft = set(words)
 
     guess = ''
@@ -72,16 +106,18 @@ def playGame(words):
     while guess != master:
         guess = bestWord(wordsLeft)
         nguesses += 1
-        resps[guess] = getResp(guess, master)
-        # printGuess(guess, resps[guess])
+        resp = getResp(guess, master)
+        if VERBOSE:
+            printGuess(guess, resp)
         words2rem = set()
         for word in wordsLeft:
-            for guess, resp in resps.items():
-                if getResp(guess, word) != resps[guess]:
-                    words2rem.add(word)
+            if getResp(guess, word) != resp:
+                words2rem.add(word)
         wordsLeft = wordsLeft - words2rem
 
-    # print(f"you got it! The word was {master}.")
+    if VERBOSE:
+        print(f"you got it! The word was {master}.")
+        input()
     return nguesses
 
 
@@ -92,9 +128,12 @@ def main():
             words.append(w.strip())
 
     cnt = 0
-    for i in tqdm(range(1_000)):
-        cnt += playGame(words)
-    print(f"Average score over 1_000 runs: {cnt/1_000:0.2f}")
+    masters = words
+    if NUM_MASTERS:
+        masters = random.sample(words, NUM_MASTERS)
+    for master in tqdm(masters):
+        cnt += playGame(words, master)
+    print(f"Average score over {len(masters)} runs: {cnt/len(masters):0.2f}")
 
 if __name__ == "__main__":
     main()
