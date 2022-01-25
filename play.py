@@ -9,14 +9,16 @@ from tqdm import tqdm
 # FIRST_WORD = 'arose'  # hack to speed up search
 STRATEGY = 'COMMON_CHAR_W_EXACT'
 FIRST_WORD = 'rates'  # hack to speed up search
+# STRATEGY = 'HIGHEST_MATCH'
+# FIRST_WORD = 'eases'  # hack to speed up search
 
 # COMMON_CHAR_W_EXACT params
 IN_WORD_SCORE = 1
 EXACT_MATCH_SCORE = 1.45
 
-WORD_LIST = None  # to be set in main()
+GUESS_LIST = None  # to be set in main()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-NUM_MASTERS = None
+NUM_MASTERS = 100
 VERBOSE = False
 
 
@@ -30,7 +32,7 @@ def charcount(w):
     return d
 
 def bestWord(wordsLeft):
-    if len(wordsLeft) == len(WORD_LIST) and FIRST_WORD:
+    if len(wordsLeft) == len(GUESS_LIST) and FIRST_WORD:
         return FIRST_WORD
     if STRATEGY == 'COMMON_CHAR':
         chartot = dict()
@@ -48,7 +50,7 @@ def bestWord(wordsLeft):
     elif STRATEGY == 'COMMON_CHAR_W_EXACT':
         max_score = 0
         max_guess = None
-        for guess in WORD_LIST:
+        for guess in wordsLeft:
             score = 0
             for master in wordsLeft:
                 for r in getResp(guess, master):
@@ -61,6 +63,29 @@ def bestWord(wordsLeft):
                 max_guess = guess
         if not max_guess:
             raise("bug in your code, yyyyep")
+        return max_guess
+    elif STRATEGY == 'HIGHEST_MATCH':
+        cscore = dict()
+        for c in ALPHABET:
+            cscore[c] = [0,0,0,0,0]
+        for master in wordsLeft:
+            for i in range(5):
+                for j in range(5):
+                    add = 1
+                    if i == j:
+                        add = EXACT_MATCH_SCORE
+                    cscore[master[i]][j] += add
+        max_score = 0
+        max_guess = None
+        for guess in wordsLeft:
+            score = 0
+            for i in range(5):
+                score += cscore[guess[i]][i]
+            if score > max_score:
+                max_score = score
+                max_guess = guess
+        if not max_guess:
+            raise('BUG')
         return max_guess
     else:
         raise(f"bad strategy {STRATEGY}")
@@ -107,22 +132,20 @@ def playGame(words, master=None):
 
     guess = ''
     nguesses = 0
-    resps = dict()
 
     while guess != master:
         guess = bestWord(wordsLeft)
         nguesses += 1
         resp = getResp(guess, master)
-        if VERBOSE:
-            printGuess(guess, resp)
-        words2rem = set()
-        for word in wordsLeft:
+        for word in list(wordsLeft):
             if getResp(guess, word) != resp:
-                words2rem.add(word)
-        wordsLeft = wordsLeft - words2rem
+                wordsLeft.remove(word)
+        if VERBOSE:
+            print(master, len(wordsLeft), sep=', ', end=', guess=')
+            printGuess(guess, resp)
+
 
     if VERBOSE:
-        print(f"you got it! The word was {master}.")
         input()
     return nguesses
 
@@ -133,8 +156,8 @@ def main():
         for w in f.readlines():
             words.append(w.strip())
 
-    global WORD_LIST
-    WORD_LIST = words
+    global GUESS_LIST
+    GUESS_LIST = frozenset(words)
 
     masters = words
     if NUM_MASTERS:
