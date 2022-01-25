@@ -1,3 +1,4 @@
+from functools import lru_cache
 import math
 import numpy as np
 import random
@@ -5,14 +6,25 @@ from termcolor import cprint
 from tqdm import tqdm
 
 # STRATEGY = 'COMMON_CHAR'
+# FIRST_WORD = 'arose'  # hack to speed up search
+STRATEGY = 'COMMON_CHAR_W_EXACT'
+FIRST_WORD = 'rates'  # hack to speed up search
+# STRATEGY = 'MIN_MASTER_LEFT'
 
-STRATEGY = 'MIN_MASTER_LEFT'
+# COMMON_CHAR_W_EXACT params
+IN_WORD_SCORE = 1
+EXACT_MATCH_SCORE = 1.45
+
+# MIN_MASTER_LEFT strategy params
 MASTER_CNT_LOG_BASE = 24  # master count left -> expected turns
 
+WORD_LIST = None  # to be set in main()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
 NUM_MASTERS = None
 VERBOSE = False
 
+
+@lru_cache(maxsize=3088)
 def charcount(w):
     d = dict()
     for c in w:
@@ -21,25 +33,44 @@ def charcount(w):
         d[c] += 1
     return d
 
-def bestWord(words):
+def bestWord(wordsLeft):
+    if len(wordsLeft) == len(WORD_LIST) and FIRST_WORD:
+        return FIRST_WORD
     if STRATEGY == 'COMMON_CHAR':
         chartot = dict()
         for c in ALPHABET:
             chartot[c] = 0
-        for w in words:
+        for w in wordsLeft:
             for c,_ in charcount(w).items():
                 chartot[c] += 1
         scores = dict()
-        for w in words:
+        for w in wordsLeft:
             scores[w] = 0
             for c,_ in charcount(w).items():
                 scores[w] += chartot[c]
         return sorted(scores.items(), key=lambda item: item[1], reverse=True)[0][0]
+    elif STRATEGY == 'COMMON_CHAR_W_EXACT':
+        max_score = 0
+        max_guess = None
+        for guess in WORD_LIST:
+            score = 0
+            for master in wordsLeft:
+                for r in getResp(guess, master):
+                    if r is False:
+                        score += IN_WORD_SCORE
+                    if r is True:
+                        score += EXACT_MATCH_SCORE
+            if score > max_score:
+                max_score = score
+                max_guess = guess
+        if not max_guess:
+            raise("bug in your code, yyyyep")
+        return max_guess
     elif STRATEGY == 'MIN_MASTER_LEFT':
         min_rem = -1
         min_guess = None
-        masters = words
-        guesses = words
+        masters = wordsLeft
+        guesses = wordsLeft
         for guess in guesses:
             expRem = 0
             resps = dict()
@@ -127,10 +158,13 @@ def main():
         for w in f.readlines():
             words.append(w.strip())
 
-    cnt = 0
+    global WORD_LIST
+    WORD_LIST = words
+
     masters = words
     if NUM_MASTERS:
         masters = random.sample(words, NUM_MASTERS)
+    cnt = 0
     for master in tqdm(masters):
         cnt += playGame(words, master)
     print(f"Average score over {len(masters)} runs: {cnt/len(masters):0.2f}")
