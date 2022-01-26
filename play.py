@@ -1,4 +1,5 @@
 from functools import lru_cache
+import heapq
 import math
 import numpy as np
 import random
@@ -8,7 +9,6 @@ from tqdm import tqdm
 # STRATEGY = 'COMMON_CHAR'
 # STRATEGY = 'COMMON_CHAR_W_EXACT'
 # STRATEGY = 'RANDOM'
-# FIRST_WORD = 'rates'  # hack to speed up search
 STRATEGY = 'MONTE_CARLO'
 FIRST_WORD = 'rates'  # hack to speed up search
 
@@ -18,12 +18,13 @@ EXACT_MATCH_SCORE = 1.45
 
 # MONTE_CARLO params
 MONTE_CARLO_LT = 20        # do monte carlo when there's <= 20 words.
-MONTE_CARLO_SIM_COUNT = 20 # do simulations on up to 20 possible masters
-MONTE_CARLO_STRATEGY = 'COMMON_CHAR_W_EXACT'
+MONTE_CARLO_TOP_N = 20     # only simulate the top N guesses from guessList
+MONTE_CARLO_SIM_COUNT = 5  # do simulations on up to this many master words
+MONTE_CARLO_STRATEGY = 'COMMON_CHAR_W_EXACT' # heuristic for simulations
 
 NUM_WORDS = None  # to be set by main()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-NUM_MASTERS = 50
+NUM_MASTERS = 500
 VERBOSE = False
 
 
@@ -37,14 +38,17 @@ def charcount(w):
     return d
 
 def bestWord(wordsLeft, strategy, guessWords):
+    return bestWords(wordsLeft, strategy, guessWords)[0]
+
+def bestWords(wordsLeft, strategy, guessWords, n=1):
     if len(wordsLeft) == 0:
         raise("bug in your code")
     if len(wordsLeft) <= 2:
-        return next(iter(wordsLeft))
+        return list(wordsLeft)[:n]
     if len(wordsLeft) == NUM_WORDS and FIRST_WORD:
-        return FIRST_WORD
+        return [FIRST_WORD]
     if strategy == 'RANDOM':
-        return random.choice(list(wordsLeft))
+        return random.choices(list(wordsLeft), k=n)
     if strategy == 'COMMON_CHAR':
         chartot = dict()
         for c in ALPHABET:
@@ -52,16 +56,16 @@ def bestWord(wordsLeft, strategy, guessWords):
         for w in wordsLeft:
             for c,_ in charcount(w).items():
                 chartot[c] += 1
-        scores = dict()
-        for w in wordsLeft:
-            scores[w] = 0
+        scores = []
+        for i,w in enumerate(wordsLeft):
+            scores[i] = 0
             for c,_ in charcount(w).items():
-                scores[w] += chartot[c]
-        return sorted(scores.items(), key=lambda item: item[1], reverse=True)[0][0]
+                scores[i] += chartot[c]
+        best = heapq.nlargest(n, enumerate(wordsLeft), key=lambda i: scores[i[0]])
+        return [x[1] for x in best]
     elif strategy == 'COMMON_CHAR_W_EXACT':
-        max_score = 0
-        max_guess = None
-        for guess in wordsLeft:
+        scores = []
+        for guess in guessWords:
             score = 0
             for master in wordsLeft:
                 for r in getResp(guess, master):
@@ -69,19 +73,18 @@ def bestWord(wordsLeft, strategy, guessWords):
                         score += IN_WORD_SCORE
                     if r is True:
                         score += EXACT_MATCH_SCORE
-            if score > max_score:
-                max_score = score
-                max_guess = guess
-        if not max_guess:
-            raise("bug in your code, yyyyep")
-        return max_guess
+            scores.append((score, master))
+        best = heapq.nlargest(n, enumerate(wordsLeft), key=lambda i: scores[i[0]])
+        return [x[1] for x in best]
     elif STRATEGY == 'MONTE_CARLO':
+        if n > 1:
+            raise('MONTE_CARLO does not support n > 1')
         if len(wordsLeft) > MONTE_CARLO_LT:
-            return bestWord(wordsLeft, MONTE_CARLO_STRATEGY, guessWords)
+            return bestWords(wordsLeft, MONTE_CARLO_STRATEGY, guessWords)
 
         bestSoFar = 1_000_000_000 # way too big
         bestGuess = None
-        for guess in guessWords:
+        for guess in bestWords(wordsLeft, MONTE_CARLO_STRATEGY, guessWords, n=MONTE_CARLO_TOP_N):
             nGuesses = 0
             for master in random.sample(list(wordsLeft), min(len(wordsLeft), MONTE_CARLO_SIM_COUNT)):
                 resp = getResp(guess, master)
@@ -98,7 +101,7 @@ def bestWord(wordsLeft, strategy, guessWords):
                 bestGuess = guess
         if not bestGuess:
             raise(f"bug {bestGuess}")
-        return bestGuess
+        return [bestGuess]
     else:
         raise(f"bad strategy {STRATEGY}")
 
