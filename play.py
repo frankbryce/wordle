@@ -13,8 +13,8 @@ STRATEGY = 'COMMON_CHAR_W_EXACT'
 FIRST_WORD = 'rates'  # hack to speed up search
 
 # GUESS_REMOVE_STRATEGY = 'REMOVE_GUESS'  # only remove the last guess
-GUESS_REMOVE_STRATEGY = 'WORDS_LEFT'  # only keep possible words left
-# GUESS_REMOVE_STRATEGY = 'NO_MATCH'  # remove words with no characters in words left
+# GUESS_REMOVE_STRATEGY = 'WORDS_LEFT'  # only keep possible words left
+GUESS_REMOVE_STRATEGY = 'NO_MATCH'  # remove words with no characters in words left
 
 # COMMON_CHAR_W_EXACT params
 IN_WORD_SCORE = 1
@@ -28,7 +28,7 @@ MONTE_CARLO_STRATEGY = 'COMMON_CHAR_W_EXACT' # heuristic for simulations
 
 NUM_WORDS = None  # to be set by main()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-NUM_MASTERS = 50
+NUM_MASTERS = None
 VERBOSE = False
 
 
