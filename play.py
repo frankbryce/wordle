@@ -10,19 +10,20 @@ from tqdm import tqdm
 # STRATEGY = 'RANDOM'
 # FIRST_WORD = 'rates'  # hack to speed up search
 STRATEGY = 'MONTE_CARLO'
-FIRST_WORD = 'stead'  # hack to speed up search
+FIRST_WORD = 'rates'  # hack to speed up search
 
 # COMMON_CHAR_W_EXACT params
 IN_WORD_SCORE = 1
 EXACT_MATCH_SCORE = 1.45
 
 # MONTE_CARLO params
-MONTE_CARLO_SIM_COUNT = 10
-MONTE_CARLO_STRATEGY = 'COMMON_CHAR'
+MONTE_CARLO_LT = 20        # do monte carlo when there's <= 20 words.
+MONTE_CARLO_SIM_COUNT = 20 # do simulations on up to 20 possible masters
+MONTE_CARLO_STRATEGY = 'COMMON_CHAR_W_EXACT'
 
 NUM_WORDS = None  # to be set by main()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-NUM_MASTERS = 500
+NUM_MASTERS = 50
 VERBOSE = False
 
 
@@ -75,6 +76,9 @@ def bestWord(wordsLeft, strategy, guessWords):
             raise("bug in your code, yyyyep")
         return max_guess
     elif STRATEGY == 'MONTE_CARLO':
+        if len(wordsLeft) > MONTE_CARLO_LT:
+            return bestWord(wordsLeft, MONTE_CARLO_STRATEGY, guessWords)
+
         bestSoFar = 1_000_000_000 # way too big
         bestGuess = None
         for guess in guessWords:
@@ -87,7 +91,7 @@ def bestWord(wordsLeft, strategy, guessWords):
                         words2rem.add(word)
                 left = wordsLeft - words2rem
                 nGuesses += playGame(left, MONTE_CARLO_STRATEGY, master, left, verbose=False)
-                if nGuesses > bestSoFar * MONTE_CARLO_SIM_COUNT:
+                if nGuesses > bestSoFar:
                     break
             if nGuesses < bestSoFar:
                 bestSoFar = nGuesses
@@ -112,7 +116,6 @@ def printGuess(guess, resp):
         cprint(c, 'white', r2color(resp[i]), end='')
     print()
 
-@lru_cache(maxsize=65536)
 def getResp(guess, master):
     # None is miss, False is wrong spot, True is right spot
     resp = [None,None,None,None,None]
@@ -142,17 +145,12 @@ def playGame(wordsLeft, strategy, master, allWords=None, verbose=VERBOSE):
 
     while guess != master:
         guess = bestWord(wordsLeft, strategy, guessWords)
+        guessWords.remove(guess) # don't re-guess any words
         nguesses += 1
         resp = getResp(guess, master)
         for word in list(wordsLeft):
             if getResp(guess, word) != resp:
                 wordsLeft.remove(word)
-        missingChars = set(guess[i] for i in range(5) if resp[i] is None)
-        for word in list(guessWords):
-            for c in missingChars:
-                if c in word:
-                    guessWords.remove(word)
-                    break
         if verbose:
             print(master, len(wordsLeft), 'guess=', sep=', ')
             printGuess(guess, resp)
