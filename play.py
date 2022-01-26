@@ -7,10 +7,14 @@ from termcolor import cprint
 from tqdm import tqdm
 
 # STRATEGY = 'COMMON_CHAR'
-# STRATEGY = 'COMMON_CHAR_W_EXACT'
+STRATEGY = 'COMMON_CHAR_W_EXACT'
 # STRATEGY = 'RANDOM'
-STRATEGY = 'MONTE_CARLO'
+# STRATEGY = 'MONTE_CARLO'
 FIRST_WORD = 'rates'  # hack to speed up search
+
+# GUESS_REMOVE_STRATEGY = 'REMOVE_GUESS'  # only remove the last guess
+GUESS_REMOVE_STRATEGY = 'WORDS_LEFT'  # only keep possible words left
+# GUESS_REMOVE_STRATEGY = 'NO_MATCH'  # remove words with no characters in words left
 
 # COMMON_CHAR_W_EXACT params
 IN_WORD_SCORE = 1
@@ -24,7 +28,7 @@ MONTE_CARLO_STRATEGY = 'COMMON_CHAR_W_EXACT' # heuristic for simulations
 
 NUM_WORDS = None  # to be set by main()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-NUM_MASTERS = 500
+NUM_MASTERS = 50
 VERBOSE = False
 
 
@@ -57,7 +61,7 @@ def bestWords(wordsLeft, strategy, guessWords, n=1):
             for c,_ in charcount(w).items():
                 chartot[c] += 1
         scores = []
-        for i,w in enumerate(wordsLeft):
+        for i,w in enumerate(guessWords):
             scores[i] = 0
             for c,_ in charcount(w).items():
                 scores[i] += chartot[c]
@@ -105,6 +109,30 @@ def bestWords(wordsLeft, strategy, guessWords, n=1):
     else:
         raise(f"bad strategy {STRATEGY}")
 
+def refineGuessWords(guess, wordsLeft, guessWords):
+    if GUESS_REMOVE_STRATEGY == 'REMOVE_GUESS':
+        guessWords.remove(guess)
+        return
+    if GUESS_REMOVE_STRATEGY == 'WORDS_LEFT':
+        for w in list(guessWords):
+            if w not in wordsLeft:
+                guessWords.remove(w)
+        return
+    if GUESS_REMOVE_STRATEGY == 'NO_MATCH':
+        charsLeft = set()
+        for w in wordsLeft:
+            for c in w:
+                charsLeft.add(c)
+        for w in list(guessWords):
+            matches = False
+            for c in charsLeft:
+                matches = True
+                break
+            if not matches:
+                guessWords.remove(w)
+        return
+    raise("invalid GUESS_REMOVE_STRATEGY")
+
 def r2color(r):
     if r is None:
         return 'on_grey'
@@ -148,12 +176,12 @@ def playGame(wordsLeft, strategy, master, allWords=None, verbose=VERBOSE):
 
     while guess != master:
         guess = bestWord(wordsLeft, strategy, guessWords)
-        guessWords.remove(guess) # don't re-guess any words
         nguesses += 1
         resp = getResp(guess, master)
         for word in list(wordsLeft):
             if getResp(guess, word) != resp:
                 wordsLeft.remove(word)
+        refineGuessWords(guess, wordsLeft, guessWords)
         if verbose:
             print(master, len(wordsLeft), 'guess=', sep=', ')
             printGuess(guess, resp)
@@ -174,6 +202,7 @@ def main():
 
     masters = words
     if NUM_MASTERS:
+        random.seed(42)  # make hermetic
         masters = random.sample(words, NUM_MASTERS)
     cnt = 0
     for master in tqdm(masters):
