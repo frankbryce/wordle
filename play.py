@@ -7,9 +7,10 @@ from termcolor import cprint
 from tqdm import tqdm
 
 # STRATEGY = 'COMMON_CHAR'
-STRATEGY = 'COMMON_CHAR_W_EXACT'
+# STRATEGY = 'COMMON_CHAR_W_EXACT'
 # STRATEGY = 'RANDOM'
 # STRATEGY = 'MONTE_CARLO'
+STRATEGY = 'MIN_LEFT'
 FIRST_WORD = 'rates'  # hack to speed up search
 
 # GUESS_REMOVE_STRATEGY = 'REMOVE_GUESS'  # only remove the last guess
@@ -28,8 +29,8 @@ MONTE_CARLO_STRATEGY = 'COMMON_CHAR_W_EXACT' # heuristic for simulations
 
 NUM_WORDS = None  # to be set by main()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-NUM_MASTERS = None
-VERBOSE = False
+NUM_MASTERS = 5
+VERBOSE = True
 
 
 @lru_cache(maxsize=4096)
@@ -79,6 +80,17 @@ def bestWords(wordsLeft, strategy, guessWords, n=1):
                         score += EXACT_MATCH_SCORE
             scores.append((score, master))
         best = heapq.nlargest(n, enumerate(wordsLeft), key=lambda i: scores[i[0]])
+        return [x[1] for x in best]
+    elif STRATEGY == 'MIN_LEFT':
+        rm = []
+        for guess in guessWords:
+            rm.append(0)
+            for master in wordsLeft:
+                resp = getResp(guess, master)
+                for word in wordsLeft:
+                    if getResp(guess, word) != resp:
+                        rm[-1] += 1
+        best = heapq.nlargest(n, enumerate(wordsLeft), key=lambda i: rm[i[0]])
         return [x[1] for x in best]
     elif STRATEGY == 'MONTE_CARLO':
         if n > 1:
