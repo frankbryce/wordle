@@ -14,8 +14,8 @@ STRATEGY = 'MIN_LEFT'
 FIRST_WORD = 'rates'  # hack to speed up search
 
 # GUESS_REMOVE_STRATEGY = 'REMOVE_GUESS'  # only remove the last guess
-# GUESS_REMOVE_STRATEGY = 'WORDS_LEFT'  # only keep possible words left
-GUESS_REMOVE_STRATEGY = 'NO_MATCH'  # remove words with no characters in words left
+GUESS_REMOVE_STRATEGY = 'WORDS_LEFT'  # only keep possible words left
+# GUESS_REMOVE_STRATEGY = 'NO_MATCH'  # remove words with no characters in words left
 
 # COMMON_CHAR_W_EXACT params
 IN_WORD_SCORE = 1
@@ -28,6 +28,7 @@ MONTE_CARLO_SIM_COUNT = 5  # do simulations on up to this many master words
 MONTE_CARLO_STRATEGY = 'COMMON_CHAR_W_EXACT' # heuristic for simulations
 
 NUM_WORDS = None  # to be set by main()
+RESP_DICT = None  # to be set by buildRespDict()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
 NUM_MASTERS = 5
 VERBOSE = True
@@ -189,7 +190,7 @@ def printGuess(guess, resp):
         cprint(c, 'white', r2color(resp[i]), end='')
     print()
 
-def getResp(guess, master):
+def getRespNoCache(guess, master):
     # 0 is miss, 1 is wrong spot, 2 is right spot
     resp = [0,0,0,0,0]
     mastercpy = list(master)
@@ -209,6 +210,11 @@ def getResp(guess, master):
             resp[c_in_guess] = 1
     return tuple(resp)
 
+def getResp(guess, master):
+    for r in RESP_DICT:
+        if (guess, master) in RESP_DICT[r]:
+            return r
+    raise("bug in code")
 
 def playGame(wordsLeft, strategy, master, allWords, verbose=VERBOSE):
     guessWords = allWords
@@ -231,6 +237,16 @@ def playGame(wordsLeft, strategy, master, allWords, verbose=VERBOSE):
         input()
     return nguesses
 
+def buildRespDict(words):
+    print("precompute all possible responses from oracle...")
+    global RESP_DICT
+    RESP_DICT = dict()
+    for w1 in tqdm(words):
+        for w2 in words:
+            r = getRespNoCache(w1, w2)
+            if r not in RESP_DICT:
+                RESP_DICT[r] = set()
+            RESP_DICT[r].add((w1,w2))
 
 def main():
     words = []
@@ -240,6 +256,8 @@ def main():
 
     global NUM_WORDS
     NUM_WORDS = len(words)
+
+    buildRespDict(words)
 
     masters = words
     if NUM_MASTERS:
