@@ -2,6 +2,8 @@ from functools import lru_cache
 import heapq
 import math
 import numpy as np
+import os.path
+import pickle
 import random
 from termcolor import cprint
 from tqdm import tqdm
@@ -9,13 +11,13 @@ from tqdm import tqdm
 # STRATEGY = 'COMMON_CHAR'
 # STRATEGY = 'COMMON_CHAR_W_EXACT'
 # STRATEGY = 'RANDOM'
-# STRATEGY = 'MONTE_CARLO'
-STRATEGY = 'MIN_LEFT'
+STRATEGY = 'MONTE_CARLO'
+# STRATEGY = 'MIN_LEFT'
 FIRST_WORD = 'rates'  # hack to speed up search
 
 # GUESS_REMOVE_STRATEGY = 'REMOVE_GUESS'  # only remove the last guess
-GUESS_REMOVE_STRATEGY = 'WORDS_LEFT'  # only keep possible words left
-# GUESS_REMOVE_STRATEGY = 'NO_MATCH'  # remove words with no characters in words left
+# GUESS_REMOVE_STRATEGY = 'WORDS_LEFT'  # only keep possible words left
+GUESS_REMOVE_STRATEGY = 'NO_MATCH'  # remove words with no characters in words left
 
 # COMMON_CHAR_W_EXACT params
 IN_WORD_SCORE = 1
@@ -28,10 +30,11 @@ MONTE_CARLO_SIM_COUNT = 5  # do simulations on up to this many master words
 MONTE_CARLO_STRATEGY = 'COMMON_CHAR_W_EXACT' # heuristic for simulations
 
 NUM_WORDS = None  # to be set by main()
+RESP_DICT_FILE = 'resp_dict.pkl'
 RESP_DICT = None  # to be set by buildRespDict()
 ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
-NUM_MASTERS = 5
-VERBOSE = True
+NUM_MASTERS = 50
+VERBOSE = False
 
 
 class WordBag:
@@ -116,15 +119,13 @@ def bestWords(wordsLeft, strategy, guessWords, n=1):
         best = heapq.nlargest(n, enumerate(wordsLeft.bag), key=lambda i: scores[i[0]])
         return [x[1] for x in best]
     elif STRATEGY == 'MIN_LEFT':
-        rm = []
-        for guess in tqdm(guessWords.bag):
-            rm.append(0)
+        matches = []
+        for guess in guessWords.bag:
+            matches.append(0)
             for master in wordsLeft.bag:
                 resp = getResp(guess, master)
-                for word in wordsLeft.bag:
-                    if getResp(guess, word) != resp:
-                        rm[-1] += 1
-        best = heapq.nlargest(n, enumerate(wordsLeft.bag), key=lambda i: rm[i[0]])
+                matches[-1] += len(RESP_DICT[resp][guess])
+        best = heapq.nsmallest(n, enumerate(wordsLeft.bag), key=lambda i: matches[i[0]])
         return [x[1] for x in best]
     elif STRATEGY == 'MONTE_CARLO':
         if n > 1:
@@ -138,11 +139,7 @@ def bestWords(wordsLeft, strategy, guessWords, n=1):
             nGuesses = 0
             for master in random.sample(list(wordsLeft.bag), min(len(wordsLeft.bag), MONTE_CARLO_SIM_COUNT)):
                 resp = getResp(guess, master)
-                words2rem = WordBag()
-                for word in wordsLeft.bag:
-                    if getResp(guess, word) != resp:
-                        words2rem.add(word)
-                left = wordsLeft.minus(words2rem)
+                left = WordBag(wordsLeft.bag.intersection(RESP_DICT[resp][guess]))
                 nGuesses += playGame(left, MONTE_CARLO_STRATEGY, master, left, verbose=False)
                 if nGuesses > bestSoFar:
                     break
@@ -190,7 +187,7 @@ def printGuess(guess, resp):
         cprint(c, 'white', r2color(resp[i]), end='')
     print()
 
-def getRespNoCache(guess, master):
+def getResp(guess, master):
     # 0 is miss, 1 is wrong spot, 2 is right spot
     resp = [0,0,0,0,0]
     mastercpy = list(master)
@@ -209,12 +206,6 @@ def getRespNoCache(guess, master):
         if c_in_guess >= 0:
             resp[c_in_guess] = 1
     return tuple(resp)
-
-def getResp(guess, master):
-    for r in RESP_DICT:
-        if (guess, master) in RESP_DICT[r]:
-            return r
-    raise("bug in code")
 
 def playGame(wordsLeft, strategy, master, allWords, verbose=VERBOSE):
     guessWords = allWords
@@ -238,15 +229,28 @@ def playGame(wordsLeft, strategy, master, allWords, verbose=VERBOSE):
     return nguesses
 
 def buildRespDict(words):
-    print("precompute all possible responses from oracle...")
     global RESP_DICT
+    if os.path.exists(RESP_DICT_FILE):
+        print(f"Loading precomputed oracle responses from {RESP_DICT_FILE}...")
+        with open(RESP_DICT_FILE, 'rb') as f:
+            RESP_DICT = pickle.load(f)
+            return
+
+    print("precomputing all possible responses from oracle...")
     RESP_DICT = dict()
     for w1 in tqdm(words):
         for w2 in words:
-            r = getRespNoCache(w1, w2)
+            r = getResp(w1, w2)
             if r not in RESP_DICT:
-                RESP_DICT[r] = set()
-            RESP_DICT[r].add((w1,w2))
+                RESP_DICT[r] = dict()
+            if w1 not in RESP_DICT[r]:
+                RESP_DICT[r][w1] = set()
+            RESP_DICT[r][w1].add(w2)
+
+    if RESP_DICT_FILE:
+        print(f"saving precomputed responses to {RESP_DICT_FILE}")
+        with open(RESP_DICT_FILE, 'wb') as f:
+            pickle.dump(RESP_DICT, f)
 
 def main():
     words = []
